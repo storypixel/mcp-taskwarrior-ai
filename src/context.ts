@@ -13,67 +13,77 @@ export class ContextManager {
   private context: ProjectContext = {};
 
   async detectContext(): Promise<ProjectContext> {
-    // Check common workspace locations
-    const possibleWorkspaces = [
-      join(homedir(), 'Work'),
-      join(homedir(), 'Projects'),
-      process.cwd(),
-    ];
+    const cwd = process.cwd();
 
-    for (const workspace of possibleWorkspaces) {
-      // Check for pharmacy-workspace
-      const pharmacyWorkspace = join(workspace, 'pharmacy-workspace');
-      if (await this.exists(pharmacyWorkspace)) {
-        this.context.workspacePath = pharmacyWorkspace;
-        this.context.ticketsPath = join(pharmacyWorkspace, '.tickets');
-
-        // Try to detect current ticket from task state
-        const taskStatePath = join(pharmacyWorkspace, '.task-state.json');
-        if (await this.exists(taskStatePath)) {
-          try {
-            const taskState = JSON.parse(await readFile(taskStatePath, 'utf-8'));
-            if (taskState.currentFocus?.ticket) {
-              this.context.currentTicket = taskState.currentFocus.ticket;
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
+    // Check if there's a .taskproject file that defines the project name
+    const projectFilePath = join(cwd, '.taskproject');
+    if (await this.exists(projectFilePath)) {
+      const projectName = (await readFile(projectFilePath, 'utf-8')).trim();
+      this.context.currentProject = projectName;
+      this.context.workspacePath = cwd;
+      this.context.ticketsPath = join(cwd, '.tickets');
+    } else {
+      // Try to detect from git repository name
+      try {
+        const result = await this.executeCommand('git rev-parse --show-toplevel');
+        if (result) {
+          const repoPath = result.trim();
+          const repoName = repoPath.split('/').pop() || 'general';
+          this.context.currentProject = repoName;
+          this.context.workspacePath = repoPath;
+          this.context.ticketsPath = join(repoPath, '.tickets');
+        } else {
+          // Fall back to current directory name
+          const dirName = cwd.split('/').pop() || 'general';
+          this.context.currentProject = dirName;
+          this.context.workspacePath = cwd;
         }
-
-        // Check for myheb-android
-        const androidPath = join(workspace, 'myheb-android');
-        if (await this.exists(androidPath)) {
-          // Try to get current branch as potential ticket
-          try {
-            const headPath = join(androidPath, '.git', 'HEAD');
-            const head = await readFile(headPath, 'utf-8');
-            const match = head.match(/ref: refs\/heads\/(.+)/);
-            if (match && match[1].startsWith('DRX-')) {
-              this.context.currentTicket = match[1].trim();
-            }
-          } catch (e) {
-            // Ignore git errors
-          }
-        }
-
-        break;
+      } catch {
+        // If not in git repo, use directory name
+        const dirName = cwd.split('/').pop() || 'general';
+        this.context.currentProject = dirName;
+        this.context.workspacePath = cwd;
       }
     }
 
-    // Detect project from current directory
-    const cwd = process.cwd();
-    if (cwd.includes('myheb-android')) {
-      this.context.currentProject = 'myheb-android';
-    } else if (cwd.includes('pharmacy-workspace')) {
-      // pharmacy-workspace IS the myheb-android workspace/puppeteer
-      this.context.currentProject = 'myheb-android';
-    } else if (cwd.includes('heb-graphql')) {
-      this.context.currentProject = 'heb-graphql';
-    } else if (cwd.includes('mcp-taskwarrior')) {
-      this.context.currentProject = 'mcp-taskwarrior-ai';
+    // Try to detect current ticket from common patterns
+    try {
+      // Check for .task-state.json in current workspace
+      const taskStatePath = join(this.context.workspacePath || cwd, '.task-state.json');
+      if (await this.exists(taskStatePath)) {
+        const taskState = JSON.parse(await readFile(taskStatePath, 'utf-8'));
+        if (taskState.currentFocus?.ticket) {
+          this.context.currentTicket = taskState.currentFocus.ticket;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    // Try to get current git branch as potential ticket
+    try {
+      const branch = await this.executeCommand('git branch --show-current');
+      if (branch && /^[A-Z]+-\d+/.test(branch)) {
+        this.context.currentTicket = branch.trim();
+      }
+    } catch {
+      // Ignore git errors
     }
 
     return this.context;
+  }
+
+  private async executeCommand(command: string): Promise<string> {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    try {
+      const { stdout } = await execAsync(command);
+      return stdout.trim();
+    } catch {
+      return '';
+    }
   }
 
   async getTicketTasks(ticket: string): Promise<string[]> {

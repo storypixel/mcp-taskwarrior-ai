@@ -106,7 +106,7 @@ class TaskwarriorBridge {
     }
   }
 
-  formatOutput(output: string, action: string): string {
+  async formatOutput(output: string, action: string): Promise<string> {
     // Clean up Taskwarrior output for better AI consumption
     const lines = output.split('\n').filter(line => line.trim());
 
@@ -131,6 +131,16 @@ class TaskwarriorBridge {
       if (tasks.length > 0) {
         return `Current tasks:\n${tasks.join('\n')}`;
       }
+
+      // No tasks found - check if we're filtering by project
+      const context = await this.contextManager.detectContext();
+      if (context.currentProject) {
+        return `No tasks found for project: ${context.currentProject}\n\n` +
+               `Would you like to create a task for this project?\n` +
+               `You can say: "add [task description]" and it will be tagged with project:${context.currentProject}`;
+      }
+
+      return 'No tasks found.';
     }
 
     return output;
@@ -344,11 +354,12 @@ class TaskwarriorMCPServer {
             const { query } = args as { query: string };
             const { action, args: taskArgs } = await this.bridge.parseNaturalLanguage(query);
             const result = await this.bridge.execute(`${action} ${taskArgs}`);
+            const formatted = await this.bridge.formatOutput(result, action);
             return {
               content: [
                 {
                   type: 'text',
-                  text: this.bridge.formatOutput(result, action),
+                  text: formatted,
                 },
               ],
             };

@@ -65,24 +65,29 @@ class TaskwarriorBridge {
       }
     }
 
+    // Get current context to filter tasks
+    const context = await this.contextManager.detectContext();
+    const projectFilter = context.currentProject ? `project:${context.currentProject}` : '';
+
     // Convert natural language to Taskwarrior commands
     switch (action) {
       case 'add':
         return { action: 'add', args };
       case 'list':
+        let listArgs = '';
         if (args.includes('today') || args.includes('now')) {
-          return { action: 'list', args: 'due:today' };
-        }
-        if (args.includes('urgent') || args.includes('high')) {
-          return { action: 'list', args: 'priority:H' };
-        }
-        if (args.includes('project')) {
+          listArgs = `due:today ${projectFilter}`.trim();
+        } else if (args.includes('urgent') || args.includes('high')) {
+          listArgs = `priority:H ${projectFilter}`.trim();
+        } else if (args.includes('project')) {
           const projectMatch = args.match(/project[: ](\S+)/i);
           if (projectMatch) {
-            return { action: 'list', args: `project:${projectMatch[1]}` };
+            listArgs = `project:${projectMatch[1]}`;
           }
+        } else {
+          listArgs = projectFilter;
         }
-        return { action: 'list', args: '' };
+        return { action: 'list', args: listArgs };
       case 'complete':
         const taskIdMatch = args.match(/\d+/);
         if (taskIdMatch) {
@@ -90,7 +95,7 @@ class TaskwarriorBridge {
         }
         return { action: 'done', args: '1' }; // Default to first task
       case 'next':
-        return { action: 'next', args: '' };
+        return { action: 'next', args: projectFilter };
       case 'context':
         if (args) {
           return { action: 'context', args };

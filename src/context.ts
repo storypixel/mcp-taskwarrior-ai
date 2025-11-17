@@ -65,7 +65,8 @@ export class ContextManager {
     if (cwd.includes('myheb-android')) {
       this.context.currentProject = 'myheb-android';
     } else if (cwd.includes('pharmacy-workspace')) {
-      this.context.currentProject = 'pharmacy-workspace';
+      // pharmacy-workspace IS the myheb-android workspace/puppeteer
+      this.context.currentProject = 'myheb-android';
     } else if (cwd.includes('heb-graphql')) {
       this.context.currentProject = 'heb-graphql';
     } else if (cwd.includes('mcp-taskwarrior')) {

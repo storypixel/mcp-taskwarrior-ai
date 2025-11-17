@@ -18,6 +18,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Local MCP configuration
+.mcp.json
+
 # IDE
 .vscode/
 .idea/

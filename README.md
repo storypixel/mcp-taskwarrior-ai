@@ -138,9 +138,20 @@ Execute raw Taskwarrior commands for advanced users:
 
 ## Project Context Integration
 
-The bridge automatically detects:
+The bridge automatically detects project context using:
+1. **`.taskproject` file** - If present, defines the project name for Taskwarrior
+2. **Git repository name** - Falls back to the repo name from git
+3. **Directory name** - Uses current directory name if not in git
+
+To override project detection, create a `.taskproject` file:
+```bash
+echo "my-project-name" > .taskproject
+```
+
+This is useful when one workspace manages tasks for another project.
+
+The bridge also detects:
 - Current Git branch (for ticket context)
-- Workspace location (pharmacy-workspace, myheb-android, etc.)
 - Task state from `.task-state.json`
 - Ticket tasks from `.tickets/<ticket>/mr-checklist.md`
 
@@ -194,11 +205,8 @@ The server uses your existing Taskwarrior configuration (`~/.taskrc`). You can c
 
 ### Context Detection
 
-The bridge looks for project context in these locations:
-- `~/Work/pharmacy-workspace/` - Primary workspace
-- `~/Work/myheb-android/` - Android project
-- `~/Projects/` - Other projects
-- Current working directory
+The bridge uses the current working directory and automatically detects project context.
+No hardcoded paths or specific project names are used.
 
 ### Ticket Integration
 
